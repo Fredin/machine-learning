@@ -1,0 +1,82 @@
+---
+title: "Machine Learning Project Report"
+author: "EFO"
+date: "Saturday, March 21, 2015"
+output: html_document
+---
+## Introduction
+
+We have been given the task of creating a predictive model from data taken from sensors put in people preforming unilateral bicep curls with dumbbells. The subjects were instructed to preform the movement correctly (class A) and with a number of common mistakes (classes B, C, D, E). We want to be able to predict it the person wearing the sensors was performing a correct curl or was making one of those common mistakes.
+
+To know more about the data visit its [project website](http://groupware.les.inf.puc-rio.br/har).
+
+We will use a random forest algorithm to solve this task. 
+
+To encourage reproducible reasearch all the code used will be shown.
+
+## Basic setup
+
+```{r setting up, cache=TRUE}
+setwd("~/CourseraSpecialization/MachineLearning")
+
+mydata<- read.csv("pml-training.csv")
+
+library(caret)
+library(randomForest)
+```
+
+## Create training and testing partitions
+```{r Partitioning, cache=TRUE}
+set.seed(321)
+inTrain<- createDataPartition(y=mydata$classe, p=0.6, list=FALSE)
+
+trainSet<-mydata[inTrain,]
+testSet<-mydata[-inTrain,]
+```
+
+## Prune variables
+
+Here I opted to take out the variables with near-zero variance as they contribute little to the model's predictive value, but make the model longer to compute.
+
+I also excised the variables with NAs, since most of them had them by the thousands, making attempts to impute those values an exercise in futility. 
+
+```{r prune variable, cache=TRUE}
+NZV<-nearZeroVar(trainSet)
+trainSet<-trainSet[,-NZV]
+
+deathRow<-NULL
+for (i in seq_along(trainSet)){
+    if (anyNA(trainSet[,i])==TRUE){
+        deathRow<-c(deathRow,i)
+    }
+}
+
+trainSet<-trainSet[,-deathRow]
+
+trainSet<-trainSet[,-c(1:6)] # take out subject name and time stamps
+```
+
+## Making a random forest and predicting
+
+I chose to use a random forest as a predictive model, because they are robust and fairly accurate. One drawback is that they can take a long time to compute. In part, the aggressive pruning of variables will help shorten this time span, but I also chose to reduce the number of trees to 100, instead of the deafault 500. This will undoubtly bias the model, but our test set is large enough to account for that.
+```{random forest, cache=TRUE}
+modFit<- randomForest(classe~., data= trainSet, ntree = 100)
+
+predictions<-predict(modFit,testSet)
+
+confus<-confusionMatrix(predictions,testSet$classe)
+
+crossValidation<-rfcv(trainSet[,1:52],trainSet$classe)
+```` 
+
+The random forest was cross-validated and has an expected out-of-sample error rate of `r crossValidation$error.cv[[1]]`. 
+
+It is also useful to see the confusion matrix of the predicted classes of the test set vs. the actual ones. It is also very encouraging.
+
+```{r confusion matrix, echo=FALSE}
+confus
+```
+
+## Conclusions
+
+The model is quite good as it is. It manage to score 20/20 on the assignments test set. Further improvements could consist on further reducing the number of variables to about 13, with help ot the varImp fucntion.
